@@ -22,6 +22,10 @@ impl CPU {
             self.program_counter = self.stack[self.stack_pointer as usize];
         }
     }
+    // Think about adding a check to ensure nnn is 12 bits
+    fn jp_addr(&mut self, nnn: u16) {
+        self.program_counter = nnn;
+    }
 }
 
 struct keyboard {
