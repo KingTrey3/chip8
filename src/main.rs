@@ -26,6 +26,12 @@ impl CPU {
     fn jp_addr(&mut self, nnn: u16) {
         self.program_counter = nnn;
     }
+
+    fn call_addr(&mut self, nnn: u16) {        
+        self.stack[self.stack_pointer as usize] = self.program_counter;
+        self.stack_pointer += 1;
+        self.program_counter = nnn;
+    }
 }
 
 struct keyboard {
