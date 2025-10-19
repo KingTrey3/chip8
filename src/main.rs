@@ -38,6 +38,12 @@ impl CPU {
             self.program_counter += 2;
         }
     }
+
+    fn sne_vx_byte(&mut self, kk: u8, x: u8) {
+       if self.v[x as usize] != kk {
+            self.program_counter += 2;
+        } 
+    }
 }
 
 struct keyboard {
