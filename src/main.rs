@@ -44,6 +44,12 @@ impl CPU {
             self.program_counter += 2;
         } 
     }
+
+    fn se_vx_vy(&mut self, x: u8, y: u8) {
+        if self.v[x as usize] == self.v[y as usize] {
+            self.program_counter += 2;
+        }
+    }
 }
 
 struct keyboard {
