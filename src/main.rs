@@ -50,6 +50,10 @@ impl CPU {
             self.program_counter += 2;
         }
     }
+
+    fn ld_vx_byte(&mut self, x: u8, kk: u8) {
+        self.v[x as usize] = kk;
+    }
 }
 
 struct keyboard {
