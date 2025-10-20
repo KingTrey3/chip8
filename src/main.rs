@@ -64,9 +64,16 @@ impl CPU {
     }
 
     fn or_vx_vy(&mut self, x: u8, y: u8) {
-        self.v[x as usize] |= self.v[y as usize]
+        self.v[x as usize] |= self.v[y as usize];
     }
-    
+
+    fn and_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] &= self.v[y as usize];
+    }
+
+    fn xor_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] ^= self.v[y as usize];
+    }
 }
 
 struct keyboard {
