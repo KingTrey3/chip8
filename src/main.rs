@@ -74,6 +74,21 @@ impl CPU {
     fn xor_vx_vy(&mut self, x: u8, y: u8) {
         self.v[x as usize] ^= self.v[y as usize];
     }
+
+    fn add_vx_vy(&mut self, x: u8, y: u8) {
+        let mut a = self.v[x as usize];
+        let mut b = self.v[y as usize];
+        match a.checked_add(b) {
+            Some(sum) => {
+                self.v[x as usize] = sum;
+                self.v[15] = 0;
+            },
+            None => {
+                self.v[x as usize] += self.v[y as usize];
+                self.v[15] = 1;
+            }
+        }
+    }
 }
 
 struct keyboard {
