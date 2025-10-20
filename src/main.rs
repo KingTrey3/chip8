@@ -58,6 +58,10 @@ impl CPU {
     fn add_vx_byte(&mut self, x: u8, kk: u8) {
         self.v[x as usize] += kk;
     }
+
+    fn ld_vx_vy(&mut self, x: u8, y: u8) {
+        self.v[x as usize] = self.v[y as usize];
+    }
 }
 
 struct keyboard {
