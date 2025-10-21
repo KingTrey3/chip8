@@ -1,5 +1,5 @@
 use std::array;
-use std::rand::{task_rng, Rng};
+use rand::{prelude::*, random_range};
 
 fn main() {
     println!("Hello, world!");
@@ -150,7 +150,7 @@ impl CPU {
     }
 
     fn rnd_vx_byte(&mut self, x: u8, kk: u8) {
-        let rand_byte: u8 = task_rng().gen_range(0, 255);
+        let rand_byte: u8 = random_range(0..=255);
         self.v[x as usize] = rand_byte & kk;
     }
 
@@ -180,8 +180,13 @@ struct Chip8 {
     memory: [u8; 4096],
     cpu: CPU,
     keyboard: keyboard,
-    // display: display,
+    display: [u8; 64 * 32],
     // timers: timers,
     // sound: sound
 }
 
+impl Chip8 {
+    fn cls(&mut self) {
+        self.display.fill(0);
+    }
+}
