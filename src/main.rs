@@ -89,6 +89,16 @@ impl CPU {
             }
         }
     }
+
+    fn sub_vx_vy(&mut self, x: u8, y: u8) {
+        if self.v[x as usize] > self.v[y as usize] {
+           self.v[15] = 1; 
+        } else {
+            self.v[15] = 0;
+        }
+
+        self.v[x as usize] -= self.v[y as usize]; 
+    }
 }
 
 struct keyboard {
