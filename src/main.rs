@@ -1,4 +1,5 @@
 use std::array;
+use std::rand::{task_rng, Rng};
 
 fn main() {
     println!("Hello, world!");
@@ -10,7 +11,8 @@ struct CPU {
     sound: u8,
     program_counter: u16,
     stack_pointer: u8,
-    stack: [u16; 16]
+    stack: [u16; 16],
+    i: u16
 }
 
 impl CPU {
@@ -120,7 +122,7 @@ impl CPU {
         self.v[x as usize] = self.v[y as usize] - self.v[x as usize];
     }
 
-    fn shl_vx_vy(&mut self, x: u8, y: u8) {
+    fn shl_vx_vy(&mut self, x: u8) {
         let msb = (self.v[x as usize] >> 7) & 1;
 
         if msb == 1 {
@@ -130,6 +132,43 @@ impl CPU {
         }
 
         self.v[x as usize] *= 2;
+    }
+
+    fn sne_vx_vy(&mut self, x: u8, y: u8) {
+        if self.v[y as usize] != self.v[x as usize] {
+            self.program_counter += 2;
+        }
+    }
+
+    fn ld_i_addr(&mut self, nnn: u16) {
+        self.i = nnn;
+    }
+
+    fn jp_v0_addr(&mut self, nnn: u16) {
+        let v0 = self.v[0] as u16;
+        self.program_counter = nnn + v0;
+    }
+
+    fn rnd_vx_byte(&mut self, x: u8, kk: u8) {
+        let rand_byte: u8 = task_rng().gen_range(0, 255);
+        self.v[x as usize] = rand_byte & kk;
+    }
+
+    fn ld_vx_dt(&mut self, x: u8) {
+        self.v[x as usize] = self.delay;
+    }
+
+    fn ld_dt_vx(&mut self, x: u8) {
+        self.delay = self.v[x as usize];
+    }
+
+    fn ld_st_vx(&mut self, x: u8) {
+        self.sound = self.v[x as usize];
+    }
+
+    fn add_i_vx(&mut self, x: u8) {
+        let vx = self.v[x as usize] as u16; 
+        self.i += vx;
     }
 }
 
