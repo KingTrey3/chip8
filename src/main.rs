@@ -99,6 +99,38 @@ impl CPU {
 
         self.v[x as usize] -= self.v[y as usize]; 
     }
+
+    fn shr_vx_vy(&mut self, x: u8, y: u8) {
+        if self.v[x as usize] % 2 == 0 {
+           self.v[15] = 0;
+        } else {
+           self.v[15] = 1; 
+        }
+
+        self.v[x as usize] /= 2;
+    }
+
+    fn subn_vx_vy(&mut self, x: u8, y: u8) {
+        if self.v[y as usize] > self.v[x as usize] {
+           self.v[15] = 1; 
+        } else {
+            self.v[15] = 0;
+        }
+
+        self.v[x as usize] = self.v[y as usize] - self.v[x as usize];
+    }
+
+    fn shl_vx_vy(&mut self, x: u8, y: u8) {
+        let msb = (self.v[x as usize] >> 7) & 1;
+
+        if msb == 1 {
+           self.v[15] = 1; 
+        } else {
+           self.v[15] = 0; 
+        }
+
+        self.v[x as usize] *= 2;
+    }
 }
 
 struct keyboard {
