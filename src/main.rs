@@ -189,4 +189,62 @@ impl Chip8 {
     fn cls(&mut self) {
         self.display.fill(0);
     }
+
+    fn skp_vx(&mut self, x: u8) {
+        if self.keyboard.keys[self.cpu.v[x as usize] as usize] == true {
+            self.cpu.program_counter += 2;
+        }
+    }
+
+    fn sknp_vx(&mut self, x: u8) {
+        if self.keyboard.keys[self.cpu.v[x as usize] as usize] == false {
+            self.cpu.program_counter += 2;
+        }
+    }
+
+    fn ld_vx_k(&mut self, x: u8) {
+        let original = self.keyboard.keys;
+
+        let mut i = 0;
+        while i < self.keyboard.keys.len() {
+            if self.keyboard.keys[i] != original[i] {
+                self.cpu.v[x as usize] = i as u8;
+                return;
+            }
+            i += 1;
+        }
+
+        self.cpu.program_counter -= 2;
+    }
+
+    fn ld_i_vx(&mut self, x: u8) {
+        let mut index = 0;
+        let mut addr = self.cpu.i; 
+
+        while index <= x {
+            self.memory[addr as usize] = self.cpu.v[index as usize];
+            index += 1;
+            addr += 1;
+        }
+    }
+
+    fn ld_vx_i(&mut self, x: u8) {
+        let mut index = 0;
+        let mut addr = self.cpu.i;
+
+        while index <= x {
+            self.cpu.v[index as usize] = self.memory[addr as usize];
+            index += 1;
+            addr += 1;
+        } 
+    }
+
+    fn ld_b_vx(&mut self, x: u8) {
+        let three_digits = self.cpu.v[x as usize].to_string();
+        let three_digit_vec: Vec<char> = three_digits.chars().collect();
+
+        self.memory[self.cpu.i as usize] = three_digit_vec[0] as u8;
+        self.memory[self.cpu.i as usize + 1] = three_digit_vec[1] as u8;
+        self.memory[self.cpu.i as usize + 2] = three_digit_vec[2] as u8;
+    }
 }
