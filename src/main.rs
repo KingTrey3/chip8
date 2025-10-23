@@ -189,6 +189,10 @@ impl CPU {
         let vx = self.v[x as usize] as u16; 
         self.i += vx;
     }
+
+    fn ld_f_vx(&mut self, x: u8) {
+        self.i = (self.v[x as usize] * 5) as u16;
+    }
 }
 
 struct keyboard {
@@ -265,5 +269,30 @@ impl Chip8 {
         self.memory[self.cpu.i as usize] = three_digit_vec[0] as u8;
         self.memory[self.cpu.i as usize + 1] = three_digit_vec[1] as u8;
         self.memory[self.cpu.i as usize + 2] = three_digit_vec[2] as u8;
+    }
+
+    fn drw_vx_vy_nibble(&mut self, x: u8, y: u8, n: u8) {
+        self.cpu.v[15] = 0;
+
+        for index in 0..n {
+            let mut sprite = self.memory[(self.cpu.i + (index as u16)) as usize];
+            let row = (self.cpu.v[y as usize] + index) % 32;
+
+            for index in 0..8 {
+                let b = (sprite & 0x80) >> 7;
+                let col = (self.cpu.v[x as usize] + index) % 64;
+                let offset = row * 64 + col;
+
+                if b == 1 {
+                    if self.display[offset as usize] != 0 {
+                        self.display[offset as usize] = 0;
+                        self.cpu.v[15] = 1;
+                    } else {
+                        self.display[offset as usize] = 1;
+                    }
+                }
+                sprite <<= 1;
+            }
+        }
     }
 }
