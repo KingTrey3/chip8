@@ -454,4 +454,13 @@ impl Chip8 {
         }
         self.cpu.program_counter += 2;
     }
+
+    fn load_sprites(&mut self, sprites: [u8; 80]) {
+        let mut i = 0;
+
+        while i < sprites.len() {
+            self.memory[i] = sprites[i];
+            i += 1;
+        }
+    }
 }
