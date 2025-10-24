@@ -1,5 +1,7 @@
 use std::array;
 use rand::{prelude::*, random_range};
+use std::env;
+use std::fs;
 
 const SPRITES: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
@@ -22,6 +24,13 @@ const SPRITES: [u8; 80] = [
 
 fn main() {
     println!("Hello, world!");
+
+    let args: Vec<String> = env::args().collect();
+    let rom_file_path = &args[1];
+    let rom_bytes = fs::read(rom_file_path)
+        .expect("Should have been able to read the file");
+
+    
 }
 
 struct CPU {
@@ -461,6 +470,15 @@ impl Chip8 {
         while i < sprites.len() {
             self.memory[i] = sprites[i];
             i += 1;
+        }
+    }
+
+    fn load_rom(&mut self, rom: Vec<u8>) {
+        let mut i = 512;
+
+        for byte in rom {
+            self.memory[i] = byte;
+             i += 1;
         }
     }
 }
