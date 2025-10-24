@@ -1,5 +1,9 @@
 use std::array;
+use std::time::{Instant, Duration};
 use rand::{prelude::*, random_range};
+use sdl2::audio::{AudioCallback, AudioSpecDesired};
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use std::env;
 use std::fs;
 
@@ -23,14 +27,209 @@ const SPRITES: [u8; 80] = [
 ];
 
 fn main() {
-    println!("Hello, world!");
-
     let args: Vec<String> = env::args().collect();
     let rom_file_path = &args[1];
     let rom_bytes = fs::read(rom_file_path)
         .expect("Should have been able to read the file");
 
-    
+    let mut chip8: Chip8 = Chip8 { 
+        memory: [0; 4096], 
+        cpu: CPU { 
+            v: [0; 16], 
+            delay: 0, 
+            sound: 0, 
+            program_counter: 0x200, 
+            stack_pointer: 0, 
+            stack: [0; 16], 
+            i: 0 }, 
+        keyboard: keyboard { keys: [false; 16] }, 
+        display: [0; 64 * 32],
+        draw_flag: false 
+    };
+
+    chip8.load_sprites(SPRITES);
+    chip8.load_rom(rom_bytes);
+
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+    let audio_subsystem = sdl_context.audio().unwrap();
+
+    let desired_spec = AudioSpecDesired {
+        freq: Some(44100),
+        channels: Some(1),
+        samples: None
+    };
+
+    let device = audio_subsystem.open_playback(None, &desired_spec, |spec| {
+        SquareWave {
+            phase_inc: 440.0 / spec.freq as f32,
+            phase: 0.0,
+            volume: 0.25
+        }
+    }).unwrap();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
+    let window = video_subsystem.window("Chip 8 Window", 640, 320)
+        .position_centered()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().build().unwrap();
+
+    let cpu_hz = 600;
+    let cpu_cycle_duration = Duration::from_micros(1_000_000 / cpu_hz);
+
+    let mut last_cpu_cycle = Instant::now();
+    let mut last_timer_update = Instant::now();
+    let timer_interval = Duration::from_micros(1_000_000 / 60);
+
+
+    'running: loop {
+        for event in event_pump.poll_iter() {
+            match event {
+                Event::Quit {..} |
+                Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                    break 'running
+                },
+                Event::KeyDown {keycode: Some(Keycode::Num1), .. } => {
+                    chip8.keyboard.keys[1] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::Num1), .. } => {
+                    chip8.keyboard.keys[1] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::Num2), .. } => {
+                    chip8.keyboard.keys[2] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::Num2), .. } => {
+                    chip8.keyboard.keys[2] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::Num3), .. } => {
+                    chip8.keyboard.keys[3] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::Num3), .. } => {
+                    chip8.keyboard.keys[3] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::Num4), .. } => {
+                    chip8.keyboard.keys[0xC] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::Num4), .. } => {
+                    chip8.keyboard.keys[0xC] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::Q), .. } => {
+                    chip8.keyboard.keys[4] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::Q), .. } => {
+                    chip8.keyboard.keys[4] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::W), .. } => {
+                    chip8.keyboard.keys[5] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::W), .. } => {
+                    chip8.keyboard.keys[5] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::E), .. } => {
+                    chip8.keyboard.keys[6] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::E), .. } => {
+                    chip8.keyboard.keys[6] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::R), .. } => {
+                    chip8.keyboard.keys[0xD] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::R), .. } => {
+                    chip8.keyboard.keys[0xD] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::A), .. } => {
+                    chip8.keyboard.keys[7] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::A), .. } => {
+                    chip8.keyboard.keys[7] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::S), .. } => {
+                    chip8.keyboard.keys[8] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::S), .. } => {
+                    chip8.keyboard.keys[8] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::D), .. } => {
+                    chip8.keyboard.keys[9] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::D), .. } => {
+                    chip8.keyboard.keys[9] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::F), .. } => {
+                    chip8.keyboard.keys[0xE] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::F), .. } => {
+                    chip8.keyboard.keys[0xE] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::Z), .. } => {
+                    chip8.keyboard.keys[0xA] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::Z), .. } => {
+                    chip8.keyboard.keys[0xA] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::X), .. } => {
+                    chip8.keyboard.keys[0] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::X), .. } => {
+                    chip8.keyboard.keys[0] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::C), .. } => {
+                    chip8.keyboard.keys[0xB] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::C), .. } => {
+                    chip8.keyboard.keys[0xB] = false;
+                },
+                Event::KeyDown {keycode: Some(Keycode::V), .. } => {
+                    chip8.keyboard.keys[0xF] = true;
+                },
+                Event::KeyUp {keycode: Some(Keycode::V), .. } => {
+                    chip8.keyboard.keys[0xF] = false;
+                },
+                _ => {},
+            }
+        }
+
+        let now = Instant::now();
+        while now.duration_since(last_cpu_cycle) >= cpu_cycle_duration {
+            chip8.fetch();
+            if chip8.draw_flag {
+                canvas.set_draw_color(sdl2::pixels::Color::BLACK);
+                canvas.clear();
+                let scale = 10;
+
+                for y in 0..32 {
+                    for x in 0..64 {
+                        let index = y * 64 + x;
+                        if chip8.display[index] != 0 {
+                            let _ = canvas.fill_rect(sdl2::rect::Rect::new(
+                                (x * scale) as i32,
+                                (y * scale) as i32,
+                                scale as u32,
+                                scale as u32,
+                            ));
+                        } 
+                    }
+                }
+                chip8.draw_flag = false;
+                canvas.present();
+            }
+        }
+        
+        if now.duration_since(last_timer_update) >= timer_interval {
+            if chip8.cpu.delay > 0 { chip8.cpu.delay -= 1; }
+            if chip8.cpu.sound > 0 { 
+                chip8.cpu.sound -= 1;
+                device.resume(); 
+            } else {
+                device.pause();
+            }
+            last_timer_update = now;
+        }
+
+    }
 }
 
 struct CPU {
@@ -237,6 +436,7 @@ struct Chip8 {
     cpu: CPU,
     keyboard: keyboard,
     display: [u8; 64 * 32],
+    draw_flag: bool,
     // timers: timers,
     // sound: sound
 }
@@ -245,6 +445,7 @@ impl Chip8 {
     // 0x00E0
     fn cls(&mut self) {
         self.display.fill(0);
+        self.draw_flag = true;
     }
 
     // Ex9E
@@ -335,6 +536,7 @@ impl Chip8 {
                 sprite <<= 1;
             }
         }
+        self.draw_flag = true;
     }
 
     // fetch
@@ -479,6 +681,27 @@ impl Chip8 {
         for byte in rom {
             self.memory[i] = byte;
              i += 1;
+        }
+    }
+}
+
+struct SquareWave {
+    phase_inc: f32,
+    phase: f32,
+    volume: f32
+}
+
+impl AudioCallback for SquareWave {
+    type Channel = f32;
+
+    fn callback(&mut self, out: &mut [f32]) {
+        for x in out.iter_mut() {
+            *x = if self.phase <= 0.5 {
+                self.volume
+            } else {
+                - self.volume
+            };
+            self.phase = (self.phase + self.phase_inc) % 1.0;
         }
     }
 }
