@@ -192,23 +192,28 @@ impl CPU {
         self.v[x as usize] = rand_byte & kk;
     }
 
+    // Fx07
     fn ld_vx_dt(&mut self, x: u8) {
         self.v[x as usize] = self.delay;
     }
 
+    // Fx15
     fn ld_dt_vx(&mut self, x: u8) {
         self.delay = self.v[x as usize];
     }
 
+    // Fx18
     fn ld_st_vx(&mut self, x: u8) {
         self.sound = self.v[x as usize];
     }
 
+    // Fx1E
     fn add_i_vx(&mut self, x: u8) {
         let vx = self.v[x as usize] as u16; 
         self.i += vx;
     }
 
+    // Fx29
     fn ld_f_vx(&mut self, x: u8) {
         self.i = (self.v[x as usize] * 5) as u16;
     }
@@ -247,6 +252,7 @@ impl Chip8 {
         }
     }
 
+    // Fx0A
     fn ld_vx_k(&mut self, x: u8) {
         let original = self.keyboard.keys;
 
@@ -262,6 +268,7 @@ impl Chip8 {
         self.cpu.program_counter -= 2;
     }
 
+    // Fx55
     fn ld_i_vx(&mut self, x: u8) {
         let mut index = 0;
         let mut addr = self.cpu.i; 
@@ -273,6 +280,7 @@ impl Chip8 {
         }
     }
 
+    // Fx65
     fn ld_vx_i(&mut self, x: u8) {
         let mut index = 0;
         let mut addr = self.cpu.i;
@@ -284,6 +292,7 @@ impl Chip8 {
         } 
     }
 
+    // Fx33
     fn ld_b_vx(&mut self, x: u8) {
         let three_digits = self.cpu.v[x as usize].to_string();
         let three_digit_vec: Vec<char> = three_digits.chars().collect();
@@ -329,10 +338,10 @@ impl Chip8 {
 
         match instruction & 0xF000 {
             0x0000 => {
-                if (instruction & 0xFF) as u8 == 0xE0 {
-                    self.cls();
-                } else {
-                    self.cpu.ret();
+                match instruction & 0x00FF {
+                    0xE0 => {self.cls();},
+                    0xEE => {self.cpu.ret();}
+                    _ => {panic!("Not an opcode")}
                 }
             },
             0x1000 => {
@@ -427,9 +436,21 @@ impl Chip8 {
                 }
             },
             0xF000 => {
-                
-            }
-
+                let x: u8 = ((instruction & 0x0F00) >> 8) as u8;
+                match instruction & 0x00FF {
+                    0x07 => {self.cpu.ld_vx_dt(x);},
+                    0x0A => {self.ld_vx_k(x);},
+                    0x15 => {self.cpu.ld_dt_vx(x);},
+                    0x18 => {self.cpu.ld_st_vx(x);},
+                    0x1E => {self.cpu.add_i_vx(x);},
+                    0x29 => {self.cpu.ld_f_vx(x);},
+                    0x33 => {self.ld_b_vx(x);},
+                    0x55 => {self.ld_i_vx(x);},
+                    0x65 => {self.ld_vx_i(x);},
+                    _ => {panic!("Not an opcode")}
+                }
+            },
+            _ => {panic!("Not an opcode")}
         }
         self.cpu.program_counter += 2;
     }
