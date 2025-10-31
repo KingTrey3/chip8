@@ -44,7 +44,8 @@ fn main() {
             i: 0 }, 
         keyboard: keyboard { keys: [false; 16] }, 
         display: [0; 64 * 32],
-        draw_flag: false 
+        draw_flag: false,
+        waiting_for_key: false, 
     };
 
     chip8.load_sprites(SPRITES);
@@ -84,15 +85,21 @@ fn main() {
     let mut last_timer_update = Instant::now();
     let timer_interval = Duration::from_micros(1_000_000 / 60);
 
+    // chip8.cpu.v[1] = 10;
+    // chip8.cpu.ld_dt_vx(1);
 
     'running: loop {
+        let now = Instant::now();
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} |
+                Event::Quit {..} => {
+                    break 'running;
+                }
                 Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
-                    break 'running
+                    break 'running;
                 },
                 Event::KeyDown {keycode: Some(Keycode::Num1), .. } => {
+                    println!("1 was pressed");
                     chip8.keyboard.keys[1] = true;
                 },
                 Event::KeyUp {keycode: Some(Keycode::Num1), .. } => {
@@ -192,12 +199,11 @@ fn main() {
             }
         }
 
-        let now = Instant::now();
-        while now.duration_since(last_cpu_cycle) >= cpu_cycle_duration {
-            chip8.fetch();
-            if chip8.draw_flag {
+
+        if chip8.draw_flag {
                 canvas.set_draw_color(sdl2::pixels::Color::BLACK);
                 canvas.clear();
+                canvas.set_draw_color(sdl2::pixels::Color::WHITE);
                 let scale = 10;
 
                 for y in 0..32 {
@@ -214,9 +220,52 @@ fn main() {
                     }
                 }
                 chip8.draw_flag = false;
+                // println!("About to draw");
                 canvas.present();
             }
-        }
+
+        // let now = Instant::now();
+        // while now.duration_since(last_cpu_cycle) >= cpu_cycle_duration {
+        // if !chip8.waiting_for_key {
+        //     chip8.fetch();
+        //     last_cpu_cycle += cpu_cycle_duration;
+        //     if chip8.draw_flag {
+        //         canvas.set_draw_color(sdl2::pixels::Color::BLACK);
+        //         canvas.clear();
+        //         canvas.set_draw_color(sdl2::pixels::Color::WHITE);
+        //         let scale = 10;
+
+        //         for y in 0..32 {
+        //             for x in 0..64 {
+        //                 let index = y * 64 + x;
+        //                 if chip8.display[index] != 0 {
+        //                     let _ = canvas.fill_rect(sdl2::rect::Rect::new(
+        //                         (x * scale) as i32,
+        //                         (y * scale) as i32,
+        //                         scale as u32,
+        //                         scale as u32,
+        //                     ));
+        //                 } 
+        //             }
+        //         }
+        //         chip8.draw_flag = false;
+        //         println!("About to draw");
+        //         canvas.present();
+        //     }
+        // }
+        // }
+
+        for _ in 0..8 {
+        if !chip8.waiting_for_key {
+            chip8.fetch();
+            } else {
+                println!("Waiting");
+            }
+        }        
+
+              
+        println!("delay timer {}", chip8.cpu.delay);
+        // println!("keys {:?}", chip8.keyboard.keys);
         
         if now.duration_since(last_timer_update) >= timer_interval {
             if chip8.cpu.delay > 0 { chip8.cpu.delay -= 1; }
@@ -228,7 +277,7 @@ fn main() {
             }
             last_timer_update = now;
         }
-
+        std::thread::sleep(Duration::from_millis(16));
     }
 }
 
@@ -244,12 +293,14 @@ struct CPU {
 
 impl CPU {
     fn ret(&mut self) {
-        if self.stack_pointer == 0 {
-            panic!("RET called on empty stack")
-        } else {
-            self.stack_pointer -= 1;
-            self.program_counter = self.stack[self.stack_pointer as usize];
-        }
+        // if self.stack_pointer == 0 {
+        //     panic!("RET called on empty stack")
+        // } else {
+        //     self.stack_pointer -= 1;
+        //     self.program_counter = self.stack[self.stack_pointer as usize];
+        // }
+        let subroutine_value = self.pop();
+        self.program_counter = subroutine_value;
     }
     // Think about adding a check to ensure nnn is 12 bits
     fn jp_addr(&mut self, nnn: u16) {
@@ -257,11 +308,24 @@ impl CPU {
     }
 
     // 2nnn
-    fn call_addr(&mut self, nnn: u16) {        
-        self.stack[self.stack_pointer as usize] = self.program_counter;
-        self.stack_pointer += 1;
+    // fn call_addr(&mut self, nnn: u16) {        
+    //     self.stack[self.stack_pointer as usize] = self.program_counter;
+    //     self.stack_pointer += 1;
+    //     self.program_counter = nnn;
+    // }
+    fn call_addr(&mut self, nnn: u16) {
+        // if self.stack_pointer as usize >= self.stack.len() {
+        //     panic!("Stack overflow: tried to CALL when stack is full");
+        // }
+
+        // self.stack[self.stack_pointer as usize] = self.program_counter;
+        // self.stack_pointer += 1;
+        // self.program_counter = nnn;
+        
+        self.push(self.program_counter);
         self.program_counter = nnn;
     }
+
 
     // 3xkk
     fn se_vx_byte(&mut self, kk: u8, x: u8) {
@@ -290,8 +354,11 @@ impl CPU {
     }
 
     // 7xkk
+    // fn add_vx_byte(&mut self, x: u8, kk: u8) {
+    //     self.v[x as usize] += kk;
+    // }
     fn add_vx_byte(&mut self, x: u8, kk: u8) {
-        self.v[x as usize] += kk;
+        self.v[x as usize] = self.v[x as usize].wrapping_add(kk);
     }
 
     // 8xy0
@@ -302,78 +369,93 @@ impl CPU {
     // 8xy1
     fn or_vx_vy(&mut self, x: u8, y: u8) {
         self.v[x as usize] |= self.v[y as usize];
+        self.v[0xF] = 0
     }
 
     // 8xy2
     fn and_vx_vy(&mut self, x: u8, y: u8) {
         self.v[x as usize] &= self.v[y as usize];
+        self.v[0xF] = 0
     }
 
     // 8xy3
     fn xor_vx_vy(&mut self, x: u8, y: u8) {
         self.v[x as usize] ^= self.v[y as usize];
+        self.v[0xF] = 0
     }
 
     // 8xy4
     fn add_vx_vy(&mut self, x: u8, y: u8) {
         let mut a = self.v[x as usize];
         let mut b = self.v[y as usize];
-        match a.checked_add(b) {
-            Some(sum) => {
-                self.v[x as usize] = sum;
-                self.v[15] = 0;
-            },
-            None => {
-                self.v[x as usize] += self.v[y as usize];
-                self.v[15] = 1;
-            }
-        }
+        // match a.checked_add(b) {
+        //     Some(sum) => {
+        //         self.v[x as usize] = sum;
+        //         self.v[15] = 0;
+        //     },
+        //     None => {
+        //         self.v[x as usize] += self.v[y as usize];
+        //         self.v[15] = 1;
+        //     }
+        // }
+        let (sum, carry) = a.overflowing_add(b);
+        self.v[x as usize] = sum;
+        self.v[0xF] = if carry {1} else {0}
     }
 
     // 8xy5
     fn sub_vx_vy(&mut self, x: u8, y: u8) {
-        if self.v[x as usize] > self.v[y as usize] {
-           self.v[15] = 1; 
-        } else {
-            self.v[15] = 0;
-        }
+        // if self.v[x as usize] > self.v[y as usize] {
+        //    self.v[15] = 1; 
+        // } else {
+        //     self.v[15] = 0;
+        // }
 
-        self.v[x as usize] -= self.v[y as usize]; 
+        // self.v[x as usize] = self.v[x as usize].wrapping_sub(self.v[y as usize]);
+
+        let (current_x, overflow) = self.v[x as usize].overflowing_sub(self.v[y as usize]);
+        let new_vf = if overflow {0} else {1};
+        self.v[x as usize] = current_x;
+        self.v[0xF] = new_vf;
     }
 
     // 8xy6
     fn shr_vx_vy(&mut self, x: u8, y: u8) {
-        if self.v[x as usize] % 2 == 0 {
-           self.v[15] = 0;
-        } else {
-           self.v[15] = 1; 
-        }
-
-        self.v[x as usize] /= 2;
+        let lsb = self.v[y as usize] & 0b0000_0001;
+        // self.v[0xF] = lsb;
+        self.v[x as usize] = self.v[y as usize] >> 1;
+        self.v[0xF] = lsb;
     }
 
     // 8xy7
     fn subn_vx_vy(&mut self, x: u8, y: u8) {
-        if self.v[y as usize] > self.v[x as usize] {
-           self.v[15] = 1; 
-        } else {
-            self.v[15] = 0;
-        }
+        // if self.v[y as usize] > self.v[x as usize] {
+        //    self.v[15] = 1; 
+        // } else {
+        //     self.v[15] = 0;
+        // }
 
-        self.v[x as usize] = self.v[y as usize] - self.v[x as usize];
+        // self.v[x as usize] = self.v[y as usize].wrapping_sub(self.v[x as usize]);
+        let (current_x, overflow) = self.v[y as usize].overflowing_sub(self.v[x as usize]);
+        let new_vf = if overflow {0} else {1};
+        self.v[x as usize] = current_x;
+        self.v[0xF] = new_vf;
     }
 
     // 8xyE
-    fn shl_vx_vy(&mut self, x: u8) {
-        let msb = (self.v[x as usize] >> 7) & 1;
+    fn shl_vx_vy(&mut self, x: u8, y: u8) {
+        let msb = (self.v[y as usize] >> 7) & 1;
 
-        if msb == 1 {
-           self.v[15] = 1; 
-        } else {
-           self.v[15] = 0; 
-        }
+        // if msb == 1 {
+        //    self.v[15] = 1; 
+        // } else {
+        //    self.v[15] = 0; 
+        // }
 
-        self.v[x as usize] *= 2;
+        // self.v[x as usize] *= 2;
+        // self.v[0xF] = msb;
+        self.v[x as usize] = self.v[y as usize] << 1;
+        self.v[0xF] = msb;
     }
 
     // 9xy0
@@ -390,8 +472,14 @@ impl CPU {
 
     // Bnnn
     fn jp_v0_addr(&mut self, nnn: u16) {
+        // let twelve_bit = nnn & 0b0000_1111_1111_1111;
+        // let shifted = twelve_bit >> 8;
+        // let x = shifted & 0b1111;
+
+        // let vx = self.v[x as usize];
+        // self.program_counter = nnn + vx as u16;
         let v0 = self.v[0] as u16;
-        self.program_counter = nnn + v0;
+        self.program_counter = v0 + nnn;
     }
 
     // Cxkk
@@ -407,7 +495,10 @@ impl CPU {
 
     // Fx15
     fn ld_dt_vx(&mut self, x: u8) {
+        println!("setting delay timer");
         self.delay = self.v[x as usize];
+        println!("x: {}", x);
+        println!("delay timer: {}", self.delay);
     }
 
     // Fx18
@@ -422,8 +513,21 @@ impl CPU {
     }
 
     // Fx29
+    // fn ld_f_vx(&mut self, x: u8) {
+    //     self.i = (self.v[x as usize] * 5) as u16;
+    // }
     fn ld_f_vx(&mut self, x: u8) {
-        self.i = (self.v[x as usize] * 5) as u16;
+        self.i = (self.v[x as usize] as u16) * 5;
+    }
+
+    fn push(&mut self, instuction: u16) {
+        self.stack[self.stack_pointer as usize] = instuction;
+        self.stack_pointer += 1;
+    }
+
+    fn pop(&mut self) -> u16 {
+        self.stack_pointer -= 1;
+        self.stack[self.stack_pointer as usize]
     }
 }
 
@@ -437,6 +541,7 @@ struct Chip8 {
     keyboard: keyboard,
     display: [u8; 64 * 32],
     draw_flag: bool,
+    waiting_for_key: bool,
     // timers: timers,
     // sound: sound
 }
@@ -463,19 +568,33 @@ impl Chip8 {
     }
 
     // Fx0A
-    fn ld_vx_k(&mut self, x: u8) {
-        let original = self.keyboard.keys;
+    // fn ld_vx_k(&mut self, x: u8) {
+    //     let original = self.keyboard.keys;
 
-        let mut i = 0;
-        while i < self.keyboard.keys.len() {
-            if self.keyboard.keys[i] != original[i] {
+    //     let mut i = 0;
+    //     while i < self.keyboard.keys.len() {
+    //         if self.keyboard.keys[i] != original[i] {
+    //             self.cpu.v[x as usize] = i as u8;
+    //             return;
+    //         }
+    //         i += 1;
+    //     }
+
+    //     self.cpu.program_counter -= 2;
+    // }
+
+    fn ld_vx_k(&mut self, x: u8) {
+        println!("Waiting for {} to be pressed", x);
+        for (i, &pressed) in self.keyboard.keys.iter().enumerate() {
+            if pressed {
                 self.cpu.v[x as usize] = i as u8;
+                self.waiting_for_key = false;
                 return;
             }
-            i += 1;
         }
-
-        self.cpu.program_counter -= 2;
+        self.waiting_for_key = true;
+        // self.cpu.program_counter -= 2;
+        return;
     }
 
     // Fx55
@@ -488,6 +607,8 @@ impl Chip8 {
             index += 1;
             addr += 1;
         }
+        
+        self.cpu.i += x as u16 + 1;
     }
 
     // Fx65
@@ -499,42 +620,82 @@ impl Chip8 {
             self.cpu.v[index as usize] = self.memory[addr as usize];
             index += 1;
             addr += 1;
-        } 
+        }
+        
+        self.cpu.i += x as u16 + 1; 
     }
 
     // Fx33
-    fn ld_b_vx(&mut self, x: u8) {
-        let three_digits = self.cpu.v[x as usize].to_string();
-        let three_digit_vec: Vec<char> = three_digits.chars().collect();
+    // fn ld_b_vx(&mut self, x: u8) {
+    //     let three_digits = self.cpu.v[x as usize].to_string();
+    //     let three_digit_vec: Vec<char> = three_digits.chars().collect();
 
-        self.memory[self.cpu.i as usize] = three_digit_vec[0] as u8;
-        self.memory[self.cpu.i as usize + 1] = three_digit_vec[1] as u8;
-        self.memory[self.cpu.i as usize + 2] = three_digit_vec[2] as u8;
+    //     self.memory[self.cpu.i as usize] = three_digit_vec[0] as u8;
+    //     self.memory[self.cpu.i as usize + 1] = three_digit_vec[1] as u8;
+    //     self.memory[self.cpu.i as usize + 2] = three_digit_vec[2] as u8;
+    // }
+    fn ld_b_vx(&mut self, x: u8) {
+        let value = self.cpu.v[x as usize];
+        self.memory[self.cpu.i as usize]     = value / 100;          // hundreds
+        self.memory[self.cpu.i as usize + 1] = (value / 10) % 10;    // tens
+        self.memory[self.cpu.i as usize + 2] = value % 10;           // units
     }
+
 
     // Dxyn
     fn drw_vx_vy_nibble(&mut self, x: u8, y: u8, n: u8) {
-        self.cpu.v[15] = 0;
+        // self.cpu.v[15] = 0;
+        // let mut any_pixel_on = false;
 
-        for index in 0..n {
-            let mut sprite = self.memory[(self.cpu.i + (index as u16)) as usize];
-            let row = (self.cpu.v[y as usize] + index) % 32;
+        // for index in 0..n {
+        //     let mut sprite = self.memory[(self.cpu.i + (index as u16)) as usize];
+        //     let row = (self.cpu.v[y as usize] + index) % 32;
 
-            for index in 0..8 {
-                let b = (sprite & 0x80) >> 7;
-                let col = (self.cpu.v[x as usize] + index) % 64;
-                let offset = row * 64 + col;
+        //     for index in 0..8 {
+        //         let b = (sprite & 0x80) >> 7;
+        //         let col = (self.cpu.v[x as usize] + index) % 64;
+        //         let offset = (row as usize) * 64 + (col as usize);
 
-                if b == 1 {
-                    if self.display[offset as usize] != 0 {
-                        self.display[offset as usize] = 0;
-                        self.cpu.v[15] = 1;
-                    } else {
-                        self.display[offset as usize] = 1;
-                    }
+        //         if b == 1 {
+        //             if self.display[offset as usize] != 0 {
+        //                 self.display[offset as usize] = 0;
+        //                 self.cpu.v[15] = 1;
+        //             } else {
+        //                 self.display[offset as usize] = 1;
+        //                 any_pixel_on = true;
+        //             }
+        //         }
+        //         sprite <<= 1;
+        //     }
+        // }
+        // println!("DRW: drew sprite at ({}, {}), any_pixel_on={}", self.cpu.v[x as usize], self.cpu.v[y as usize], any_pixel_on);
+        // self.draw_flag = true;
+
+        let x_coord = self.cpu.v[x as usize] as u16;
+        let y_coord = self.cpu.v[y as usize] as u16;
+        let num_rows = n as u16;
+        let mut flipped = 0;
+
+        for y_line in 0..num_rows {
+            let addr = self.cpu.i + y_line as u16;
+            let pixels = self.memory[addr as usize];
+
+            for x_line in 0..8 {
+                if (pixels & (0b1000_0000 >> x_line)) != 0 {
+                    let x = (x_coord + x_line) as usize % 64;
+                    let y = (y_coord + y_line) as usize % 32;
+
+                    let idx = x + 64 * y;
+                    flipped |= self.display[idx];
+                    self.display[idx] ^= 1;                    
                 }
-                sprite <<= 1;
             }
+        }
+        if flipped == 1 {
+            self.cpu.v[0xF] = 1;
+        }
+        else {
+            self.cpu.v[0xF] = 0;
         }
         self.draw_flag = true;
     }
@@ -544,24 +705,37 @@ impl Chip8 {
         let first_half = self.memory[self.cpu.program_counter as usize];
         let second_half = self.memory[self.cpu.program_counter as usize + 1];
 
-        let string_instruction = format!("{}{}", first_half, second_half);
-        let instruction: u16 = string_instruction.parse().unwrap();
+        // let string_instruction = format!("{}{}", first_half, second_half);
+        // let instruction: u16 = string_instruction.parse().unwrap();
+
+        let instruction: u16 = ((first_half as u16) << 8) | (second_half as u16);
+        println!("Instruction in decimal: {:?}", instruction);
+        let mut jumped = false;
 
         match instruction & 0xF000 {
             0x0000 => {
                 match instruction & 0x00FF {
                     0xE0 => {self.cls();},
-                    0xEE => {self.cpu.ret();}
-                    _ => {panic!("Not an opcode")}
+                    0xEE => {
+                        self.cpu.ret();
+                        // jumped = true;
+                        
+                    },
+                    0x00 => {},
+                    _ => {panic!("Not an opcode: {:#06X}", instruction)}
                 }
             },
             0x1000 => {
                 let nnn = instruction & 0xFFF;
                 self.cpu.jp_addr(nnn);
+                // jumped = true;
+                return;
             },
             0x2000 => {
                 let nnn = instruction & 0xFFF;
                 self.cpu.call_addr(nnn);
+                // jumped = true;
+                return;
             },
             0x3000 => {
                 let x: u8 = ((instruction & 0x0F00) >> 8) as u8;
@@ -605,7 +779,7 @@ impl Chip8 {
                     5 => {self.cpu.sub_vx_vy(x, y);},
                     6 => {self.cpu.shr_vx_vy(x, y);},
                     7 => {self.cpu.subn_vx_vy(x, y);},
-                    0xE => {self.cpu.shl_vx_vy(x);}, 
+                    0xE => {self.cpu.shl_vx_vy(x, y);}, 
                     _ => {panic!("Not an opcode")}
                 }
             },
@@ -624,6 +798,7 @@ impl Chip8 {
                 let nnn = instruction & 0xFFF;
 
                 self.cpu.jp_v0_addr(nnn);
+                return;
             },
             0xC000 => {
                 let x: u8 = ((instruction & 0x0F00) >> 8) as u8;
@@ -647,7 +822,10 @@ impl Chip8 {
                 }
             },
             0xF000 => {
+                // println!("made it to xF000 branch");
                 let x: u8 = ((instruction & 0x0F00) >> 8) as u8;
+                // println!("x from xF000: {}",x);
+                // println!("instruction & 0x00FF: {}", instruction & 0x00FF);
                 match instruction & 0x00FF {
                     0x07 => {self.cpu.ld_vx_dt(x);},
                     0x0A => {self.ld_vx_k(x);},
@@ -663,7 +841,10 @@ impl Chip8 {
             },
             _ => {panic!("Not an opcode")}
         }
-        self.cpu.program_counter += 2;
+        if !jumped {
+            self.cpu.program_counter += 2;
+        }
+        // println!("program counter: {}", self.cpu.program_counter);
     }
 
     fn load_sprites(&mut self, sprites: [u8; 80]) {
@@ -675,14 +856,24 @@ impl Chip8 {
         }
     }
 
-    fn load_rom(&mut self, rom: Vec<u8>) {
-        let mut i = 512;
+    // fn load_rom(&mut self, rom: Vec<u8>) {
+    //     let mut i = 512;
 
-        for byte in rom {
-            self.memory[i] = byte;
-             i += 1;
-        }
+    //     for byte in rom {
+    //         self.memory[i] = byte;
+    //          i += 1;
+    //     }
+    // }
+
+    fn load_rom(&mut self, rom: Vec<u8>) {
+    if rom.len() + 0x200 > self.memory.len() {
+        panic!("ROM too large to fit in memory!");
     }
+    for (offset, &byte) in rom.iter().enumerate() {
+        self.memory[0x200 + offset] = byte;
+    }
+}
+
 }
 
 struct SquareWave {
