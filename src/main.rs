@@ -45,7 +45,8 @@ fn main() {
         keyboard: keyboard { keys: [false; 16] }, 
         display: [0; 64 * 32],
         draw_flag: false,
-        waiting_for_key: false, 
+        waiting_for_key: false,
+        wait_for_release_key: 50,
     };
 
     chip8.load_sprites(SPRITES);
@@ -256,11 +257,11 @@ fn main() {
         // }
 
         for _ in 0..8 {
-        if !chip8.waiting_for_key {
+        // if !chip8.waiting_for_key {
             chip8.fetch();
-            } else {
-                println!("Waiting");
-            }
+            // } else {
+            //     println!("Waiting");
+            // }
         }        
 
               
@@ -542,6 +543,7 @@ struct Chip8 {
     display: [u8; 64 * 32],
     draw_flag: bool,
     waiting_for_key: bool,
+    wait_for_release_key: u8
     // timers: timers,
     // sound: sound
 }
@@ -585,14 +587,24 @@ impl Chip8 {
 
     fn ld_vx_k(&mut self, x: u8) {
         println!("Waiting for {} to be pressed", x);
+        if self.wait_for_release_key != 50 {
+            if !self.keyboard.keys[self.wait_for_release_key as usize] {
+                self.cpu.v[x as usize] = self.wait_for_release_key as u8;
+                self.waiting_for_key = false;
+                self.wait_for_release_key = 50;
+                return;
+            }
+        }
         for (i, &pressed) in self.keyboard.keys.iter().enumerate() {
             if pressed {
-                self.cpu.v[x as usize] = i as u8;
-                self.waiting_for_key = false;
+                self.wait_for_release_key = i as u8;
+                // self.cpu.v[x as usize] = i as u8;
+                // self.waiting_for_key = false;
                 return;
             }
         }
         self.waiting_for_key = true;
+
         // self.cpu.program_counter -= 2;
         return;
     }
@@ -842,7 +854,9 @@ impl Chip8 {
             _ => {panic!("Not an opcode")}
         }
         if !jumped {
+            if !self.waiting_for_key {
             self.cpu.program_counter += 2;
+            }
         }
         // println!("program counter: {}", self.cpu.program_counter);
     }
