@@ -1,6 +1,5 @@
-use std::array;
 use std::time::{Instant, Duration};
-use rand::{prelude::*, random_range};
+use rand::random_range;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -42,7 +41,7 @@ fn main() {
             stack_pointer: 0, 
             stack: [0; 16], 
             i: 0 }, 
-        keyboard: keyboard { keys: [false; 16] }, 
+        keyboard: Keyboard { keys: [false; 16] }, 
         display: [0; 64 * 32],
         draw_flag: false,
         waiting_for_key: false,
@@ -79,15 +78,12 @@ fn main() {
 
     let mut canvas = window.into_canvas().build().unwrap();
 
-    let cpu_hz = 600;
-    let cpu_cycle_duration = Duration::from_micros(1_000_000 / cpu_hz);
+    // let cpu_hz = 600;
+    // let cpu_cycle_duration = Duration::from_micros(1_000_000 / cpu_hz);
 
-    let mut last_cpu_cycle = Instant::now();
+    // let mut last_cpu_cycle = Instant::now();
     let mut last_timer_update = Instant::now();
     let timer_interval = Duration::from_micros(1_000_000 / 60);
-
-    // chip8.cpu.v[1] = 10;
-    // chip8.cpu.ld_dt_vx(1);
 
     'running: loop {
         let now = Instant::now();
@@ -200,7 +196,6 @@ fn main() {
             }
         }
 
-
         if chip8.draw_flag {
                 canvas.set_draw_color(sdl2::pixels::Color::BLACK);
                 canvas.clear();
@@ -221,7 +216,6 @@ fn main() {
                     }
                 }
                 chip8.draw_flag = false;
-                // println!("About to draw");
                 canvas.present();
             }
 
@@ -266,7 +260,6 @@ fn main() {
 
               
         println!("delay timer {}", chip8.cpu.delay);
-        // println!("keys {:?}", chip8.keyboard.keys);
         
         if now.duration_since(last_timer_update) >= timer_interval {
             if chip8.cpu.delay > 0 { chip8.cpu.delay -= 1; }
@@ -387,8 +380,8 @@ impl CPU {
 
     // 8xy4
     fn add_vx_vy(&mut self, x: u8, y: u8) {
-        let mut a = self.v[x as usize];
-        let mut b = self.v[y as usize];
+        let a = self.v[x as usize];
+        let b = self.v[y as usize];
         // match a.checked_add(b) {
         //     Some(sum) => {
         //         self.v[x as usize] = sum;
@@ -532,14 +525,14 @@ impl CPU {
     }
 }
 
-struct keyboard {
+struct Keyboard {
     keys: [bool; 16]
 }
 
 struct Chip8 {
     memory: [u8; 4096],
     cpu: CPU,
-    keyboard: keyboard,
+    keyboard: Keyboard,
     display: [u8; 64 * 32],
     draw_flag: bool,
     waiting_for_key: bool,
@@ -717,12 +710,9 @@ impl Chip8 {
         let first_half = self.memory[self.cpu.program_counter as usize];
         let second_half = self.memory[self.cpu.program_counter as usize + 1];
 
-        // let string_instruction = format!("{}{}", first_half, second_half);
-        // let instruction: u16 = string_instruction.parse().unwrap();
-
         let instruction: u16 = ((first_half as u16) << 8) | (second_half as u16);
         println!("Instruction in decimal: {:?}", instruction);
-        let mut jumped = false;
+        // let mut jumped = false;
 
         match instruction & 0xF000 {
             0x0000 => {
@@ -853,12 +843,11 @@ impl Chip8 {
             },
             _ => {panic!("Not an opcode")}
         }
-        if !jumped {
+        // if !jumped {
             if !self.waiting_for_key {
             self.cpu.program_counter += 2;
-            }
+            // }
         }
-        // println!("program counter: {}", self.cpu.program_counter);
     }
 
     fn load_sprites(&mut self, sprites: [u8; 80]) {
