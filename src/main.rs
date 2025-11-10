@@ -1,6 +1,7 @@
 use std::time::{Instant, Duration};
 use rand::random_range;
 use sdl2::audio::{AudioCallback, AudioSpecDesired};
+use sdl2::controller::Button;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use std::env;
@@ -78,6 +79,31 @@ fn main() {
 
     let mut canvas = window.into_canvas().build().unwrap();
 
+    let controller_subsystem = sdl_context.game_controller().unwrap();
+    let mut num_of_joysticks = None;
+    let mut contoller_id = None;
+
+    match controller_subsystem.num_joysticks() {
+        Ok(num) => {num_of_joysticks = Some(num)},
+        Err(e) => println!("{}", e)
+    }
+
+    for id in 0..num_of_joysticks.unwrap() {
+        if controller_subsystem.is_game_controller(id) {
+            match controller_subsystem.open(id) {
+                Ok(controller) => {
+                    println!("Opened controller: {}", controller.name());
+                    contoller_id = Some(id);
+                },
+                Err(e) => {
+                    println!("{}", e)
+                }
+            }
+        }
+    }
+
+    // let controller = controller_subsystem.open(contoller_id.unwrap()).unwrap();
+    
     // let cpu_hz = 600;
     // let cpu_cycle_duration = Duration::from_micros(1_000_000 / cpu_hz);
 
@@ -86,6 +112,7 @@ fn main() {
     let timer_interval = Duration::from_micros(1_000_000 / 60);
 
     'running: loop {
+        // let controller = controller_subsystem.open(contoller_id.unwrap()).unwrap();
         let now = Instant::now();
         for event in event_pump.poll_iter() {
             match event {
@@ -192,6 +219,31 @@ fn main() {
                 Event::KeyUp {keycode: Some(Keycode::V), .. } => {
                     chip8.keyboard.keys[0xF] = false;
                 },
+                // controller inputs
+                Event::ControllerButtonDown {button, .. } if button == Button::A => {
+                    chip8.keyboard.keys[4] = true;
+                },
+                Event::ControllerButtonDown {button, .. } if button == Button::DPadLeft => {
+                    chip8.keyboard.keys[5] = true;
+                },
+                Event::ControllerButtonDown {button, .. } if button == Button::DPadRight => {
+                    chip8.keyboard.keys[6] = true;
+                },
+                Event::ControllerButtonDown {button, .. } if button == Button::DPadDown => {
+                    chip8.keyboard.keys[7] = true;
+                },
+                Event::ControllerButtonUp {button, .. } if button == Button::A => {
+                    chip8.keyboard.keys[4] = false;
+                },
+                Event::ControllerButtonUp {button, .. } if button == Button::DPadLeft => {
+                    chip8.keyboard.keys[5] = false;
+                },
+                Event::ControllerButtonUp {button, .. } if button == Button::DPadRight => {
+                    chip8.keyboard.keys[6] = false;
+                },
+                Event::ControllerButtonUp {button, .. } if button == Button::DPadDown => {
+                    chip8.keyboard.keys[7] = false;
+                },
                 _ => {},
             }
         }
@@ -250,7 +302,7 @@ fn main() {
         // }
         // }
 
-        for _ in 0..8 {
+        for _ in 0..10 {
         // if !chip8.waiting_for_key {
             chip8.fetch();
             // } else {
@@ -261,6 +313,7 @@ fn main() {
               
         println!("delay timer {}", chip8.cpu.delay);
         
+        // let now = Instant::now();
         if now.duration_since(last_timer_update) >= timer_interval {
             if chip8.cpu.delay > 0 { chip8.cpu.delay -= 1; }
             if chip8.cpu.sound > 0 { 
@@ -270,6 +323,7 @@ fn main() {
                 device.pause();
             }
             last_timer_update = now;
+            // last_timer_update += timer_interval;
         }
         std::thread::sleep(Duration::from_millis(16));
     }
