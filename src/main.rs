@@ -102,7 +102,7 @@ fn main() {
         }
     }
 
-    // let controller = controller_subsystem.open(contoller_id.unwrap()).unwrap();
+    let controller = controller_subsystem.open(contoller_id.unwrap()).unwrap();
     
     // let cpu_hz = 600;
     // let cpu_cycle_duration = Duration::from_micros(1_000_000 / cpu_hz);
